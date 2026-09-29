@@ -40,16 +40,33 @@ async function loadVideo(file) {
   v.style.cssText = 'position:fixed;right:0;bottom:0;width:2px;height:2px;opacity:0.01;pointer-events:none;z-index:-1';
   document.body.appendChild(v);
   v.src = url;
-  await new Promise((resolve, reject) => {
-    v.onloadeddata = resolve;
-    v.onerror = () => reject(new SourceError('이 영상은 브라우저가 열지 못해요. MP4(H.264)로 저장된 영상이면 대부분 잘 열려요.'));
-  });
+  v.load();
+  const fail = new SourceError('이 영상은 브라우저가 열지 못해요. 사진 앱에서 ‘동영상 저장’으로 다시 저장하거나, 다른 영상으로 해 볼까요?');
+  try {
+    // 아이폰(사파리·카톡 등 인앱 브라우저)은 preload를 무시해서 loadeddata가 안 올 수 있다.
+    // 메타데이터만 기다린 뒤, 음소거 재생을 잠깐 시켜 첫 프레임을 받아 둔다.
+    await withTimeout(new Promise((resolve, reject) => {
+      if (v.readyState >= 1) resolve();
+      v.addEventListener('loadedmetadata', resolve, { once: true });
+      v.addEventListener('error', reject, { once: true });
+    }), 20000);
+    if (v.readyState < 2) {
+      const ready = waitEvent(v, ['loadeddata', 'canplay'], 8000);
+      try { await v.play(); } catch { /* 재생이 막혀도 탐색으로 프레임을 받는다 */ }
+      v.pause();
+      await ready;
+    }
+  } catch {
+    v.remove();
+    URL.revokeObjectURL(url);
+    throw fail;
+  }
   let duration = v.duration;
   if (!isFinite(duration)) {
     // 일부 WebM은 길이 정보가 없다 → 끝까지 탐색해서 알아낸다
     v.currentTime = 1e7;
-    await once(v, 'seeked');
-    duration = v.currentTime;
+    await waitEvent(v, ['seeked'], 5000);
+    duration = v.currentTime || 1;
   }
   let busy = Promise.resolve();
   const seek = (t) => {
@@ -57,7 +74,8 @@ async function loadVideo(file) {
     busy = busy.then(async () => {
       if (Math.abs(v.currentTime - target) < 0.0005 && v.readyState >= 2) return;
       v.currentTime = target;
-      await once(v, 'seeked');
+      // 탐색 완료 이벤트가 끝내 안 오는 기기도 있어서 멈추지 않도록 시간 제한
+      await waitEvent(v, ['seeked'], 3000);
     });
     return busy;
   };
@@ -246,6 +264,19 @@ function makeCanvas(w, h) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
   return c;
+}
+
+function withTimeout(promise, ms) {
+  return Promise.race([promise, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), ms))]);
+}
+
+/** 여러 이벤트 중 하나가 오거나 시간이 지나면 끝난다 (실패로 보지 않음) */
+function waitEvent(el, events, ms) {
+  return new Promise((resolve) => {
+    const done = () => { clearTimeout(timer); events.forEach((ev) => el.removeEventListener(ev, done)); resolve(); };
+    const timer = setTimeout(done, ms);
+    events.forEach((ev) => el.addEventListener(ev, done, { once: true }));
+  });
 }
 
 function once(el, ev) {
