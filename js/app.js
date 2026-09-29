@@ -806,6 +806,12 @@ function escapeHtml(s) {
 }
 
 $('#backBtn').addEventListener('click', () => history.back());
+$('#inappOpen').addEventListener('click', () => {
+  const url = location.href.split('#')[0];
+  if (/KAKAOTALK/i.test(navigator.userAgent)) location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`;
+  else if (/android/i.test(navigator.userAgent)) location.href = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
+  else toast('오른쪽 위 메뉴에서 ‘Safari로 열기’를 눌러 주세요', 4000);
+});
 $('#brand').addEventListener('click', () => { if (state.step !== 'working' && state.step !== 'home') resetToHome(); });
 
 /* =========================================================

@@ -15,6 +15,28 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <script>
+    // 인앱 브라우저(카톡 등)는 영상 선택·재생이 막히는 경우가 많아 기본 브라우저로 넘긴다
+    (function () {
+      var ua = navigator.userAgent;
+      var url = location.href;
+      if (/KAKAOTALK/i.test(ua)) {
+        var tried = false;
+        try { tried = sessionStorage.getItem('jjal.ext') === '1'; sessionStorage.setItem('jjal.ext', '1'); } catch (e) {}
+        if (!tried) location.href = 'kakaotalk://web/openExternal?url=' + encodeURIComponent(url);
+      } else if (/ Line\//i.test(ua) && !/openExternalBrowser=1/.test(url)) {
+        location.href = url + (url.indexOf('?') < 0 ? '?' : '&') + 'openExternalBrowser=1';
+      }
+      if (/KAKAOTALK|Instagram|FBAN|FBAV|NAVER\(inapp|DaumApps|everytimeApp/i.test(ua)) {
+        document.documentElement.classList.add('inapp');
+      }
+    })();
+  </script>
+  <div class="inapp-bar" id="inappBar">
+    <b>앱 안의 브라우저에서는 영상이 안 열릴 수 있어요</b>
+    <span>오른쪽 위 메뉴(⋮ 또는 ···)에서 <em>‘다른 브라우저로 열기’</em>를 눌러 사파리·크롬에서 열어 주세요.</span>
+    <button id="inappOpen">기본 브라우저로 열기</button>
+  </div>
   <header class="topbar">
     <button class="icon-btn" id="backBtn" aria-label="이전 단계로" hidden>
       <svg viewBox="0 0 24 24" width="24" height="24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
