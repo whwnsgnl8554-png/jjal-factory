@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+  <!-- web-only:start -->
   <script>
     // 인앱 브라우저(카톡 등)는 영상 선택·재생이 막히는 경우가 많아 기본 브라우저로 넘긴다
     (function () {
@@ -37,6 +38,7 @@
     <span>오른쪽 위 메뉴(⋮ 또는 ···)에서 <em>‘다른 브라우저로 열기’</em>를 눌러 사파리·크롬에서 열어 주세요.</span>
     <button id="inappOpen">기본 브라우저로 열기</button>
   </div>
+  <!-- web-only:end -->
   <header class="topbar">
     <button class="icon-btn" id="backBtn" aria-label="이전 단계로" hidden>
       <svg viewBox="0 0 24 24" width="24" height="24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -265,6 +267,9 @@
       </div>
     </section>
   </main>
+
+  <!-- 앱인토스 배너 광고: 홈·규격 선택 화면에서만 (편집·변환·결과 화면엔 없음) -->
+  <div class="ad-slot" id="adBanner" hidden></div>
 
   <footer class="foot">
     <a href="privacy.html">개인정보처리방침</a><span>·</span><a href="terms.html">이용약관</a>

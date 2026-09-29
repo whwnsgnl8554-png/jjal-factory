@@ -1,6 +1,7 @@
 import { loadSource, addImages, SourceError } from './sources.js';
 import { outputSize, outputDuration, drawFrame, estimateMB, applyQuality, RATIOS, TEXT_FONT } from './compose.js';
 import { makeGif, makeMp4, mp4Supported, Cancelled } from './encoders.js';
+import * as toss from './toss.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -37,10 +38,20 @@ const state = {
    ========================================================= */
 async function loadPresets() {
   // 규격이 바뀌면 presets.json만 고쳐서 배포하면 된다 (앱 재심사 없이)
-  const res = await fetch('presets.json', { cache: 'no-cache' });
-  const data = await res.json();
-  state.presets = data.presets;
-  state.groups = data.groups;
+  for (const url of toss.presetUrls()) {
+    try {
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 4000);
+      const res = await fetch(url, { cache: 'no-cache', signal: ctrl.signal });
+      clearTimeout(timer);
+      const data = await res.json();
+      if (!data.presets?.length) continue;
+      state.presets = data.presets;
+      state.groups = data.groups;
+      return;
+    } catch { /* 다음 후보로 */ }
+  }
+  throw new Error('presets');
 }
 const presetById = (id) => state.presets.find((p) => p.id === id);
 
@@ -73,17 +84,11 @@ function show(step) {
   window.scrollTo(0, 0);
 }
 
-function go(step) {
-  history.pushState({ step }, '');
-  show(step);
-}
-
-window.addEventListener('popstate', (e) => {
-  const step = e.state?.step || 'home';
+const nav = toss.createNav((step) => {
   if (state.step === 'working') {
     // 변환 중 뒤로가기 = 그만두기
     state.abort?.abort();
-    history.pushState({ step: 'edit' }, '');
+    nav.push('edit');
     show('edit');
     return;
   }
@@ -91,6 +96,17 @@ window.addEventListener('popstate', (e) => {
   if ((step === 'edit' || step === 'result') && !state.preset) { show('preset'); return; }
   if (step === 'result' && !state.result) { show('edit'); return; }
   show(step);
+});
+
+function go(step) {
+  nav.push(step);
+  show(step);
+}
+
+// 토스 시스템 뒤로가기: 열린 시트 닫기 → 이전 단계 → (홈이면) 미니앱 닫기
+toss.onSystemBack(() => {
+  if (!$('#sheet').hidden) { closeSheet(); return; }
+  nav.back();
 });
 
 /* =========================================================
@@ -125,7 +141,7 @@ async function takeFiles(files) {
     if (src.heavy) setTimeout(() => toast('큰 영상이라 저용량으로 맞춰 둘게요. 편집 화면에서 기본 화질로 바꿀 수 있어요.', 4500), 300);
     if (state.preselect) {
       applyPreset(presetById(state.preselect));
-      history.pushState({ step: 'preset' }, '');
+      nav.push('preset');
       go('edit');
     } else {
       go('preset');
@@ -430,7 +446,7 @@ function bindControls() {
   $('#boomerang').addEventListener('change', (e) => { state.s.boomerang = e.target.checked; syncControls(); });
   onSeg('colorsSeg', (v) => (state.s.colors = +v));
 
-  $('#changePreset').addEventListener('click', () => history.back());
+  $('#changePreset').addEventListener('click', () => nav.back());
   $('#makeBtn').addEventListener('click', () => convert());
 }
 
@@ -640,7 +656,7 @@ async function convert({ fromResult = false } = {}) {
     await maybeShowInterstitial();
     renderResult();
     // 결과 화면에서 다시 만든 경우엔 결과 기록을 덮어써서 뒤로가기가 꼬이지 않게
-    if (fromResult) history.replaceState({ step: 'result' }, ''); else history.pushState({ step: 'result' }, '');
+    if (fromResult) nav.replace('result'); else nav.push('result');
     show('result');
   } catch (err) {
     if (err instanceof Cancelled || abort.signal.aborted) {
@@ -667,7 +683,7 @@ $('#cancelBtn').addEventListener('click', () => state.abort?.abort());
 // 앱인토스 전면형 광고 자리: 3회 변환당 1회, 변환 완료 → 결과 화면 전환 때.
 async function maybeShowInterstitial() {
   if (state.conversions % 3 !== 0) return;
-  // TODO(앱인토스): 인앱 광고 SDK 연결 시 여기서 전면형 광고를 띄우고 닫힐 때까지 기다린다.
+  await toss.showInterstitial();
 }
 
 /* =========================================================
@@ -728,16 +744,32 @@ function renderResult() {
   confetti();
 }
 
-$('#saveBtn').addEventListener('click', () => {
-  const a = document.createElement('a');
-  a.href = state.resultUrl;
-  a.download = state.resultName;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+$('#saveBtn').addEventListener('click', async () => {
+  const btn = $('#saveBtn');
+  if (toss.canNativeSave()) {
+    btn.disabled = true;
+    btn.textContent = '저장하는 중…';
+    try {
+      await toss.nativeSave(state.result.blob, state.resultName);
+    } catch (e) {
+      console.error(e);
+      toast('저장하지 못했어요. 한 번 더 눌러 주세요', 3500);
+      return;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '저장하기';
+    }
+  } else {
+    const a = document.createElement('a');
+    a.href = state.resultUrl;
+    a.download = state.resultName;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  }
   const p = state.preset;
   if (p.afterSave) openGuide(p.afterSave);
-  else toast('저장했어요! 갤러리나 다운로드 폴더를 확인해 보세요');
+  else toast(toss.inToss ? '저장했어요! 사진 앱이나 파일 앱에서 확인해 보세요' : '저장했어요! 갤러리나 다운로드 폴더를 확인해 보세요');
 });
 $('#guideBtn').addEventListener('click', () => openGuide());
 $('#lowBtn').addEventListener('click', () => {
@@ -749,9 +781,9 @@ $('#againChips').addEventListener('click', (e) => {
   const b = e.target.closest('.chip');
   if (!b) return;
   applyPreset(presetById(b.dataset.id));
-  history.back(); // 결과 → 편집 (새 규격으로)
+  nav.back(); // 결과 → 편집 (새 규격으로)
 });
-$('#reEditBtn').addEventListener('click', () => history.back());
+$('#reEditBtn').addEventListener('click', () => nav.back());
 $('#newFileBtn').addEventListener('click', resetToHome);
 
 function resetToHome() {
@@ -760,7 +792,7 @@ function resetToHome() {
   state.s = null;
   state.preset = null;
   state.result = null;
-  history.replaceState({ step: 'home' }, '');
+  nav.reset('home');
   renderRecent();
   show('home');
 }
@@ -770,15 +802,38 @@ function resetToHome() {
    ========================================================= */
 function openGuide(callout) {
   const p = state.preset;
-  $('#sheetTitle').textContent = `${p.name}에 올리는 법`;
-  $('#sheetBody').innerHTML = (callout ? `<div class="callout">⚠️ ${callout}</div>` : '')
-    + `<ol>${p.guide.map((g) => `<li>${g}</li>`).join('')}</ol>`;
+  openSheet(`${p.name}에 올리는 법`, (callout ? `<div class="callout">⚠️ ${callout}</div>` : '')
+    + `<ol>${p.guide.map((g) => `<li>${g}</li>`).join('')}</ol>`);
+}
+function openSheet(title, bodyHtml) {
+  $('#sheetTitle').textContent = title;
+  $('#sheetBody').innerHTML = bodyHtml;
   $('#sheet').hidden = false;
   $('#sheetDim').hidden = false;
   $('#sheetOk').focus();
 }
 function closeSheet() { $('#sheet').hidden = true; $('#sheetDim').hidden = true; }
 $('#sheetOk').addEventListener('click', closeSheet);
+
+// 토스 안에서는 약관 페이지로 이동하지 않고 시트로 보여 준다 (단계 이동·뒤로가기가 꼬이지 않게)
+if (toss.inToss) {
+  $('.foot').addEventListener('click', async (e) => {
+    const a = e.target.closest('a');
+    if (!a) return;
+    e.preventDefault();
+    try {
+      const html = await fetch(a.getAttribute('href')).then((r) => r.text());
+      const main = new DOMParser().parseFromString(html, 'text/html').querySelector('main');
+      main.querySelector('a[href="index.html"], a[href="./"]')?.closest('p')?.remove();
+      const h1 = main.querySelector('h1');
+      const title = h1?.textContent || a.textContent;
+      h1?.remove();
+      openSheet(title, `<div class="doc">${main.innerHTML}</div>`);
+    } catch {
+      toast('페이지를 불러오지 못했어요');
+    }
+  });
+}
 $('#sheetDim').addEventListener('click', closeSheet);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
 
@@ -805,8 +860,8 @@ function escapeHtml(s) {
   return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-$('#backBtn').addEventListener('click', () => history.back());
-$('#inappOpen').addEventListener('click', () => {
+$('#backBtn').addEventListener('click', () => nav.back());
+$('#inappOpen')?.addEventListener('click', () => {
   const url = location.href.split('#')[0];
   if (/KAKAOTALK/i.test(navigator.userAgent)) location.href = `kakaotalk://web/openExternal?url=${encodeURIComponent(url)}`;
   else if (/android/i.test(navigator.userAgent)) location.href = `intent://${url.replace(/^https?:\/\//, '')}#Intent;scheme=https;package=com.android.chrome;end`;
@@ -818,8 +873,11 @@ $('#brand').addEventListener('click', () => { if (state.step !== 'working' && st
    시작
    ========================================================= */
 (async function init() {
-  history.replaceState({ step: 'home' }, '');
+  nav.reset('home');
   show('home');
+  if (toss.inToss) document.documentElement.classList.add('toss');
+  toss.attachBanner($('#adBanner'));
+  toss.preloadInterstitial();
   bindControls();
   bindThumbDrag();
   bindStage();

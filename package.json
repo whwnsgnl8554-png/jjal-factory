@@ -1,0 +1,18 @@
+{
+  "name": "jjal-factory",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "toss": "node scripts/build-toss.mjs",
+    "preview": "node scripts/build-toss.mjs && npx --yes serve dist -l 5174",
+    "build": "node scripts/build-toss.mjs && ait build",
+    "deploy": "ait deploy"
+  },
+  "dependencies": {
+    "@apps-in-toss/web-framework": "^3.6.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0"
+  }
+}

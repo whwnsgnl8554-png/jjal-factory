@@ -22,3 +22,24 @@
 - MP4는 WebCodecs가 없는 브라우저에선 GIF로 자동 전환. 소리는 넣지 않음.
 - 앱인토스 전면형 광고 훅: `js/app.js`의 `maybeShowInterstitial()` (3회 변환당 1회). 배너 자리는 `index.html` 주석.
 - 아직 안 한 것: 토스 SDK 연동·뒤로가기 브리지, WebP 출력, 디더링 옵션, 필터·워터마크(3차), 여러 프리셋 동시 출력, 카톡·네이버 실제 업로드 한도 실측.
+
+## 앱인토스(토스 미니앱) 빌드
+웹판 파일을 그대로 쓰고, `scripts/build-toss.mjs`가 `dist/`에 토스용 번들을 만든다.
+```sh
+npm install
+npm run build      # dist/ 생성 → jjal-factory.ait
+```
+1. 앱인토스 콘솔에 등록한 appName을 `apps-in-toss.config.ts`의 `appName`에 맞춘다 (지금 `jjal-factory`).
+2. 콘솔에서 광고 그룹 ID를 발급받아 `toss.config.json`에 넣는다 (비어 있으면 광고 없이 빌드).
+   - `bannerAdGroupId`: 홈·규격 선택 화면 하단 배너 (한 화면에 1개)
+   - `interstitialAdGroupId`: 변환 3번에 1번, 결과 화면으로 넘어가기 직전 전면 광고
+3. `.ait`를 콘솔에 올리고 테스트 스킴으로 토스 앱에서 확인 → 검수 요청.
+
+| 토스판에서 달라지는 점 | 처리 (`js/toss.js`) |
+|---|---|
+| 뒤로가기 | 토스 `backEvent` → 이전 단계, 홈에서만 `Screen.close`. 시트가 열려 있으면 시트부터 닫음. 브라우저 history는 쓰지 않음 |
+| 저장 | `File.saveBase64`로 기기에 저장 (다운로드 링크 대신) |
+| 영상 재생 | `allowsInlineMediaPlayback: true`, `mediaPlaybackRequiresUserAction: false` — 기본값이면 아이폰에서 영상 변환이 멈춤 |
+| 규격 | GitHub Pages의 최신 `presets.json`을 먼저 시도, 실패하면 번들 내장본 |
+| 약관 | 페이지 이동 대신 시트로 표시 |
+| 기타 | 라이트 모드 고정, 핀치 줌 막기, 인앱 브라우저 전환 스크립트 제거 |
