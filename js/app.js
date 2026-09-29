@@ -720,9 +720,7 @@ function renderResult() {
   $('#resultWarn').innerHTML = notes.join('<br />');
   $('#resultWarn').style.cssText = r.overTarget ? '' : 'background:var(--bg-soft);color:var(--text-2)';
 
-  const file = new File([r.blob], fileName(), { type: r.blob.type });
-  state.resultFile = file;
-  $('#shareBtn').hidden = !(navigator.canShare && navigator.canShare({ files: [file] }));
+  state.resultName = fileName();
   $('#guideBtn').textContent = `${p.emoji} ${p.name}에 올리는 법`;
   $('#againChips').innerHTML = state.presets
     .filter((x) => x.id !== p.id && x.group !== 'custom')
@@ -733,20 +731,13 @@ function renderResult() {
 $('#saveBtn').addEventListener('click', () => {
   const a = document.createElement('a');
   a.href = state.resultUrl;
-  a.download = state.resultFile.name;
+  a.download = state.resultName;
   document.body.appendChild(a);
   a.click();
   a.remove();
   const p = state.preset;
   if (p.afterSave) openGuide(p.afterSave);
   else toast('저장했어요! 갤러리나 다운로드 폴더를 확인해 보세요');
-});
-$('#shareBtn').addEventListener('click', async () => {
-  try {
-    await navigator.share({ files: [state.resultFile], title: '짤공장에서 만든 움짤' });
-  } catch (e) {
-    if (e.name !== 'AbortError') toast('공유를 열지 못했어요. 저장 후 앱에서 올려 주세요');
-  }
 });
 $('#guideBtn').addEventListener('click', () => openGuide());
 $('#lowBtn').addEventListener('click', () => {
