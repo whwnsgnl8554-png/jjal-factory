@@ -299,6 +299,10 @@ textarea:focus, input[type="number"]:focus { outline: 2px solid var(--blue); out
 .inapp-bar button { justify-self: start; margin-top: 6px; min-height: 40px; padding: 0 14px; border-radius: 10px; background: #6b5200; color: #fff; font-weight: 700; font-size: 14px; }
 @media (prefers-color-scheme: dark) { .inapp .inapp-bar { background: #3a3110; color: #ffe07a; } .inapp-bar button { background: #ffe07a; color: #3a3110; } }
 
+/* 토스 안에서는 토스 상단 바(뒤로가기·제목)만 쓴다 — 자체 헤더가 있으면 버튼이 중복돼 검수에서 반려된다 */
+.toss .topbar { display: none; }
+.toss main { padding-top: 12px; }
+
 .ad-slot { max-width: 520px; margin: 0 auto 12px; padding: 0 20px; }
 .ad-slot.empty { display: none; }
 body:not([data-step="home"]):not([data-step="preset"]) .ad-slot { display: none; }
