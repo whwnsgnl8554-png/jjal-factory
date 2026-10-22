@@ -13,6 +13,7 @@
     "@apps-in-toss/web-framework": "^3.6.0"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "mp4box": "^2.4.1"
   }
 }

@@ -1,6 +1,8 @@
 // 입력 파일(영상 / 사진 여러 장 / GIF)을 "시간 t에 그릴 수 있는 것"으로 통일한다.
 // 모든 소스는 { kind, width, height, duration, frameAt(t) → drawable, thumb, dispose() } 형태.
 
+import { openVideoDecoder } from './decode.js';
+
 const MAX_VIDEO_MB = 2048;   // 이보다 크면 폰 브라우저가 못 연다
 const HEAVY_VIDEO_MB = 100;  // 이보다 크거나 길거나 고해상도면 저용량 모드를 권한다
 
@@ -80,7 +82,34 @@ async function loadVideo(file) {
     return busy;
   };
   await seek(Math.min(0.05, duration / 2));
-  const thumb = snapshot(v, v.videoWidth, v.videoHeight);
+  // 변환용 프레임은 가능하면 파일을 직접 디코드해서 뽑는다 (decode.js 참고)
+  let dec = null;
+  try { dec = await openVideoDecoder(file); } catch { dec = null; }
+  let thumb = snapshot(v, v.videoWidth, v.videoHeight);
+  if (dec) {
+    try { for await (const c of dec.frames([Math.min(0.05, duration / 2)])) { thumb = snapshot(c, c.width, c.height); break; } } catch { dec = null; }
+  }
+
+  // <video> 경로에서 장면이 전혀 안 바뀌면(인앱 웹뷰에서 재생·탐색이 멈춘 경우) 멈춘 GIF를 만들지 않고 알린다
+  const probe = document.createElement('canvas');
+  probe.width = probe.height = 16;
+  const pctx = probe.getContext('2d', { willReadFrequently: true });
+  const signature = () => {
+    pctx.drawImage(v, 0, 0, 16, 16);
+    return pctx.getImageData(0, 0, 16, 16).data.join(',');
+  };
+  async function* watchFrozen(gen, span) {
+    let first = null, changed = false, n = 0;
+    for await (const x of gen) {
+      if (!changed) {
+        const sig = signature();
+        if (first == null) first = sig; else if (sig !== first) changed = true;
+      }
+      n++;
+      yield x;
+    }
+    if (!changed && n >= 6 && span >= 0.8) throw new SourceError('FROZEN');
+  }
 
   const nextPresented = () => new Promise((resolve) => {
     const timer = setTimeout(() => resolve(null), 1500);
@@ -124,7 +153,23 @@ async function loadVideo(file) {
     thumb,
     heavy: file.size > HEAVY_VIDEO_MB * 1048576 || duration > 60 || Math.max(v.videoWidth, v.videoHeight) > 1920,
     async frameAt(t) { await seek(t); return v; },
+    capture: dec ? 'decoder' : 'element',
     async *frames(ts) {
+      if (dec) {
+        let yielded = 0;
+        try {
+          for await (const c of dec.frames(ts)) { yielded++; yield c; }
+          return;
+        } catch (e) {
+          if (yielded) throw e; // 중간에 실패하면 섞이지 않게 그대로 실패
+          dec = null;          // 시작부터 안 되면 <video> 경로로
+          this.capture = 'element';
+        }
+      }
+      const span = Math.max(...ts) - Math.min(...ts);
+      yield* watchFrozen(this.elementFrames(ts), span);
+    },
+    async *elementFrames(ts) {
       const canPlay = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;
       // 시간이 증가하는 덩어리로 나눈다 (부메랑의 거꾸로 부분은 탐색)
       let a = 0;

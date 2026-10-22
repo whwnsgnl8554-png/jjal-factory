@@ -662,6 +662,10 @@ async function convert({ fromResult = false } = {}) {
     if (err instanceof Cancelled || abort.signal.aborted) {
       if (state.step === 'working') show(fromResult && state.result ? 'result' : 'edit');
       toast('변환을 멈췄어요');
+    } else if (err.message === 'FROZEN') {
+      // 영상 장면을 읽지 못하면 멈춘 그림을 결과로 내지 않는다
+      show('edit');
+      toast('이 기기에서는 영상의 움직임을 읽지 못했어요. 토스 앱을 최신 버전으로 업데이트하거나, 다른 영상으로 해 볼까요?', 6000);
     } else if (err.message === 'NO_WEBCODECS' || err.message === 'NO_H264') {
       state.s.format = 'gif';
       state.s.fps = Math.min(state.s.fps, 15);
