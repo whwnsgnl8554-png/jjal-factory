@@ -242,6 +242,11 @@ textarea:focus, input[type="number"]:focus { outline: 2px solid var(--blue); out
 .oven-film i { width: 52px; height: 58px; border-radius: 8px; background: linear-gradient(135deg, #3182f6, #7c5cff); opacity: .85; }
 .oven-film i:nth-child(2n) { background: linear-gradient(135deg, #ff5f8f, #ffb03a); }
 @keyframes roll { from { transform: translateX(0); } to { transform: translateX(-120px); } }
+.capture-view { width: 100%; max-width: 320px; margin: -6px 0 22px; }
+.capture-view:not([hidden]) ~ .w-label { margin-top: 0; }
+.working:has(.capture-view:not([hidden])) .oven { display: none; }
+.diag-btn { position: fixed; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 45; padding: 8px 12px; border-radius: 12px; background: #191f28; color: #fff; font-size: 13px; font-weight: 700; opacity: .85; }
+.sheet pre.diag { white-space: pre-wrap; word-break: break-all; font-size: 12px; line-height: 1.5; background: var(--bg-soft); border-radius: 12px; padding: 12px; max-height: 55vh; overflow: auto; margin: 0 0 14px; user-select: text; -webkit-user-select: text; }
 .w-label { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
 .progress { width: 100%; max-width: 320px; height: 10px; background: var(--bg-soft); border-radius: 99px; overflow: hidden; margin: 18px 0 8px; }
 .progress div { height: 100%; width: 0; background: var(--blue); border-radius: 99px; transition: width .2s; }

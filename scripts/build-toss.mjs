@@ -31,6 +31,11 @@ await build({
 });
 
 const cfg = JSON.parse(await readFile('toss.config.json', 'utf8'));
+// --debug: 화면에 '진단 정보' 버튼을 띄우는 테스트용 번들 (검수용으로는 쓰지 말 것)
+if (process.argv.includes('--debug')) {
+  cfg.debug = true;
+  console.log('  🔧 진단 모드 번들 (테스트 전용 — 검수 요청엔 일반 npm run build 결과를 올리세요)');
+}
 await writeFile('dist/toss-config.js', `window.__JJAL_TOSS__ = ${JSON.stringify(cfg)};\n`);
 if (!cfg.bannerAdGroupId || !cfg.interstitialAdGroupId) {
   console.log('  ⚠ toss.config.json에 광고 ID가 비어 있어요 → 광고 없이 빌드해요');

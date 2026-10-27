@@ -2,6 +2,11 @@
 // 모든 소스는 { kind, width, height, duration, frameAt(t) → drawable, thumb, dispose() } 형태.
 
 import { openVideoDecoder } from './decode.js';
+import { note, setDecoderReason } from './diag.js';
+
+// 디코더가 없어서 <video>로 뽑을 때, 화면에 실제로 보이게 붙여 둘 자리 (iOS 웹뷰는 안 보이는 영상을 갱신하지 않기도 한다)
+let captureHost = null;
+export function setCaptureHost(el) { captureHost = el; }
 
 const MAX_VIDEO_MB = 2048;   // 이보다 크면 폰 브라우저가 못 연다
 const HEAVY_VIDEO_MB = 100;  // 이보다 크거나 길거나 고해상도면 저용량 모드를 권한다
@@ -84,10 +89,10 @@ async function loadVideo(file) {
   await seek(Math.min(0.05, duration / 2));
   // 변환용 프레임은 가능하면 파일을 직접 디코드해서 뽑는다 (decode.js 참고)
   let dec = null;
-  try { dec = await openVideoDecoder(file); } catch { dec = null; }
+  try { dec = await openVideoDecoder(file); } catch (e) { dec = null; setDecoderReason(`열기 실패: ${e.message}`); }
   let thumb = snapshot(v, v.videoWidth, v.videoHeight);
   if (dec) {
-    try { for await (const c of dec.frames([Math.min(0.05, duration / 2)])) { thumb = snapshot(c, c.width, c.height); break; } } catch { dec = null; }
+    try { for await (const c of dec.frames([Math.min(0.05, duration / 2)])) { thumb = snapshot(c, c.width, c.height); break; } } catch (e) { dec = null; setDecoderReason(`첫 프레임 디코드 실패: ${e.message}`); }
   }
 
   // <video> 경로에서 장면이 전혀 안 바뀌면(인앱 웹뷰에서 재생·탐색이 멈춘 경우) 멈춘 GIF를 만들지 않고 알린다
@@ -108,6 +113,7 @@ async function loadVideo(file) {
       n++;
       yield x;
     }
+    note('convert', { '<video> 장면 변화': changed ? '있음' : '없음', '<video> 프레임': n });
     if (!changed && n >= 6 && span >= 0.8) throw new SourceError('FROZEN');
   }
 
@@ -162,12 +168,27 @@ async function loadVideo(file) {
           return;
         } catch (e) {
           if (yielded) throw e; // 중간에 실패하면 섞이지 않게 그대로 실패
+          setDecoderReason(`디코드 실패 → <video>로 전환: ${e.message}`);
           dec = null;          // 시작부터 안 되면 <video> 경로로
           this.capture = 'element';
         }
       }
       const span = Math.max(...ts) - Math.min(...ts);
-      yield* watchFrozen(this.elementFrames(ts), span);
+      const prevStyle = v.style.cssText;
+      if (captureHost) {
+        captureHost.hidden = false;
+        captureHost.appendChild(v);
+        v.style.cssText = 'display:block;width:100%;max-height:34vh;object-fit:contain;border-radius:12px;background:#000';
+      }
+      try {
+        yield* watchFrozen(this.elementFrames(ts), span);
+      } finally {
+        if (captureHost) {
+          v.style.cssText = prevStyle;
+          document.body.appendChild(v);
+          captureHost.hidden = true;
+        }
+      }
     },
     async *elementFrames(ts) {
       const canPlay = 'requestVideoFrameCallback' in HTMLVideoElement.prototype;

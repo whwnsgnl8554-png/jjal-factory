@@ -2,6 +2,8 @@ import { loadSource, addImages, SourceError } from './sources.js';
 import { outputSize, outputDuration, drawFrame, estimateMB, applyQuality, RATIOS, TEXT_FONT } from './compose.js';
 import { makeGif, makeMp4, mp4Supported, Cancelled } from './encoders.js';
 import * as toss from './toss.js';
+import { D, note, setSave, collectEnv, render as renderDiag } from './diag.js';
+import { setCaptureHost } from './sources.js';
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
@@ -130,9 +132,11 @@ $('#recentChips').addEventListener('click', (e) => {
 
 async function takeFiles(files) {
   if (!files?.length) return;
+  files = [...files]; // 입력칸을 비우면 FileList도 비워지므로 먼저 복사
   toast('파일 여는 중…', 8000);
   try {
     const src = await loadSource(files);
+    note('source', { 종류: src.kind, 파일: `${files[0]?.name} (${files[0]?.type || '형식 미상'}, ${((files[0]?.size || 0) / 1048576).toFixed(1)}MB${files.length > 1 ? ` 외 ${files.length - 1}개` : ''})`, 크기: `${src.width}x${src.height}`, 길이: `${(src.duration || 0).toFixed(2)}초`, 경로: src.capture || '-' });
     state.src?.dispose();
     state.src = src;
     state.result = null;
@@ -649,6 +653,7 @@ async function convert({ fromResult = false } = {}) {
       ? await makeMp4(src, s, { onProgress, signal: abort.signal })
       : await makeGif(src, s, { onProgress, signal: abort.signal });
     result.ms = performance.now() - t0;
+    note('convert', { 결과: `${(result.blob.size / 1024).toFixed(0)}KB ${result.width}x${result.height}`, 걸린시간: `${(result.ms / 1000).toFixed(1)}초` });
     result.format = s.format;
     result.requested = s;
     state.result = result;
@@ -659,6 +664,7 @@ async function convert({ fromResult = false } = {}) {
     if (fromResult) nav.replace('result'); else nav.push('result');
     show('result');
   } catch (err) {
+    D.errors.push(`변환: ${err?.message || err}`);
     if (err instanceof Cancelled || abort.signal.aborted) {
       if (state.step === 'working') show(fromResult && state.result ? 'result' : 'edit');
       toast('변환을 멈췄어요');
@@ -754,8 +760,11 @@ $('#saveBtn').addEventListener('click', async () => {
     btn.disabled = true;
     btn.textContent = '저장하는 중…';
     try {
+      setSave(`File.saveBase64 호출 — ${state.resultName} (${state.result.blob.type}, ${(state.result.blob.size / 1024).toFixed(0)}KB)`);
       await toss.nativeSave(state.result.blob, state.resultName);
+      setSave(`${D.save} → 성공 응답`);
     } catch (e) {
+      setSave(`${D.save} → 실패: ${e?.message || e}`);
       console.error(e);
       toast('저장하지 못했어요. 한 번 더 눌러 주세요', 3500);
       return;
@@ -882,6 +891,16 @@ $('#brand').addEventListener('click', () => { if (state.step !== 'working' && st
   if (toss.inToss) document.documentElement.classList.add('toss');
   toss.attachBanner($('#adBanner'));
   toss.preloadInterstitial();
+  setCaptureHost($('#captureView'));
+  collectEnv({ 토스: toss.inToss ? '예' : '아니오', 저장API: toss.canNativeSave() ? '있음' : '없음' });
+  let debugOn = !!window.__JJAL_TOSS__?.debug;
+  try { debugOn ||= localStorage.getItem('jjal.debug') === '1'; } catch { /* 무시 */ }
+  if (debugOn) {
+    $('#diagBtn').hidden = false;
+    $('#diagBtn').addEventListener('click', () => {
+      openSheet('진단 정보', `<p>이 화면을 캡처해서 보내 주세요.</p><pre class="diag">${escapeHtml(renderDiag())}</pre>`);
+    });
+  }
   bindControls();
   bindThumbDrag();
   bindStage();

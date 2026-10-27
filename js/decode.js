@@ -2,6 +2,8 @@
 // 토스 같은 인앱 웹뷰는 숨겨진 <video>를 재생·탐색해도 화면이 갱신되지 않아
 // 모든 프레임이 같은 그림(= 움직이지 않는 GIF)이 되는 일이 있어서, 변환은 이 경로를 먼저 쓴다.
 
+import { setDecoderReason } from './diag.js';
+
 let mp4boxModule;
 const loadMp4box = () => (mp4boxModule ||= import('../vendor/mp4box.js'));
 
@@ -34,12 +36,13 @@ function rotationOf(matrix) {
  * 반환: { width, height, frames(ts) } — width/height는 회전을 반영한 화면 기준 크기
  */
 export async function openVideoDecoder(file) {
-  if (typeof VideoDecoder === 'undefined' || typeof EncodedVideoChunk === 'undefined') return null;
-  if (!/mp4|quicktime|m4v/i.test(file.type) && !/\.(mp4|mov|m4v)$/i.test(file.name)) return null;
+  const no = (why) => { setDecoderReason(`사용 안 함 — ${why}`); return null; };
+  if (typeof VideoDecoder === 'undefined' || typeof EncodedVideoChunk === 'undefined') return no('이 웹뷰에 VideoDecoder 없음');
+  if (!/mp4|quicktime|m4v/i.test(file.type) && !/\.(mp4|mov|m4v)$/i.test(file.name)) return no(`MP4/MOV 아님 (${file.type || '형식 미상'})`);
 
   const boxes = await scanTopBoxes(file);
   const moov = boxes.find((b) => b.type === 'moov');
-  if (!moov || moov.size > 64 * 1048576) return null;
+  if (!moov || moov.size > 64 * 1048576) return no(`moov 없음/너무 큼 (박스: ${boxes.map((b) => b.type).join(',')})`);
 
   const { createFile, DataStream, Endianness, MP4BoxBuffer } = await loadMp4box();
   const iso = createFile();
@@ -57,10 +60,10 @@ export async function openVideoDecoder(file) {
   iso.appendBuffer(MP4BoxBuffer.fromArrayBuffer(joined.buffer, 0));
   iso.flush();
   const track = info?.videoTracks?.[0];
-  if (!track) return null;
+  if (!track) return no('영상 트랙 없음');
   const trak = iso.getTrackById(track.id);
   const samples = trak.samples || [];
-  if (!samples.length) return null;
+  if (!samples.length) return no('샘플 없음');
 
   const entry = trak.mdia.minf.stbl.stsd.entries[0];
   const confBox = entry.avcC || entry.hvcC || entry.vpcC || entry.av1C;
@@ -75,10 +78,11 @@ export async function openVideoDecoder(file) {
   const config = { codec: track.codec, codedWidth, codedHeight, description };
   try {
     const ok = await VideoDecoder.isConfigSupported(config);
-    if (!ok.supported) return null;
-  } catch { return null; }
+    if (!ok.supported) return no(`코덱 미지원 ${track.codec}`);
+  } catch (e) { return no(`코덱 확인 실패 ${track.codec}: ${e.message}`); }
 
   const rot = rotationOf(track.matrix);
+  setDecoderReason(`사용 — ${track.codec} ${codedWidth}x${codedHeight} 회전 ${rotationOf(track.matrix)}° 샘플 ${samples.length}개`);
   const swap = rot === 90 || rot === 270;
   const width = swap ? codedHeight : codedWidth;
   const height = swap ? codedWidth : codedHeight;

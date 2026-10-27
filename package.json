@@ -7,7 +7,8 @@
     "toss": "node scripts/build-toss.mjs",
     "preview": "node scripts/build-toss.mjs && npx --yes serve dist -l 5174",
     "build": "node scripts/build-toss.mjs && ait build",
-    "deploy": "ait deploy"
+    "deploy": "ait deploy",
+    "build:debug": "node scripts/build-toss.mjs --debug && ait build"
   },
   "dependencies": {
     "@apps-in-toss/web-framework": "^3.6.0"

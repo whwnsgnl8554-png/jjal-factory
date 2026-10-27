@@ -1,6 +1,15 @@
 // 프레임을 하나씩 뽑아(원본 탐색 → 합성) GIF 또는 MP4로 굽는다.
 // 메모리를 아끼려고 프레임을 쌓아두지 않고 바로바로 인코더에 흘려보낸다.
 import { outputSize, frameTimes, drawFrame, bitrateFor, applyQuality } from './compose.js';
+import { note } from './diag.js';
+
+// 결과에 서로 다른 장면이 몇 개였는지 (진단용, 16x16 축소본 비교)
+function sceneCounter() {
+  const c = document.createElement('canvas'); c.width = c.height = 16;
+  const x = c.getContext('2d', { willReadFrequently: true });
+  const seen = new Set();
+  return { add(src) { x.drawImage(src, 0, 0, 16, 16); seen.add(x.getImageData(0, 0, 16, 16).data.join(',')); }, get size() { return seen.size; } };
+}
 
 export class Cancelled extends Error {}
 
@@ -80,9 +89,12 @@ async function encodeGifOnce(src, s, progress, signal) {
     };
     worker.postMessage({ type: 'start', width: W, height: H, colors: s.colors, repeat: repeatFor(s) });
     let i = 0;
+    const scenes = sceneCounter();
     for await (const img of src.frames(times.map((f) => f.t))) {
       if (signal?.aborted) throw new Cancelled();
       drawFrame(ctx, W, H, img, s);
+      scenes.add(canvas);
+      note('convert', { 형식: 'GIF', 크기: `${W}x${H}`, '요청 프레임': times.length, '받은 프레임': i + 1, '서로 다른 장면': scenes.size, 경로: src.capture || src.kind });
       const { data } = ctx.getImageData(0, 0, W, H);
       inflight++;
       worker.postMessage({ type: 'frame', buffer: data.buffer, delay: times[i].delayMs }, [data.buffer]);
@@ -92,6 +104,7 @@ async function encodeGifOnce(src, s, progress, signal) {
     }
     worker.postMessage({ type: 'finish' });
     const out = await done;
+    note('convert', { 'GIF에 쓴 프레임': out.frames, 'GIF 용량': `${(out.bytes.length / 1024).toFixed(0)}KB` });
     if (signal?.aborted) throw new Cancelled();
     return {
       blob: new Blob([out.bytes], { type: 'image/gif' }),
@@ -149,10 +162,13 @@ export async function makeMp4(src, settings, { onProgress, signal }) {
   const frameDur = 1e6 / fps;
   try {
     let i = 0;
+    const scenes = sceneCounter();
     for await (const img of src.frames(times.map((f) => f.t))) {
       if (signal?.aborted) throw new Cancelled();
       if (encErr) throw encErr;
       drawFrame(ctx, W, H, img, s);
+      scenes.add(canvas);
+      note('convert', { 형식: 'MP4', 크기: `${W}x${H}`, 코덱: config.codec, '요청 프레임': times.length, '받은 프레임': i + 1, '서로 다른 장면': scenes.size, 경로: src.capture || src.kind });
       const frame = new VideoFrame(canvas, { timestamp: Math.round(i * frameDur), duration: Math.round(frameDur) });
       encoder.encode(frame, { keyFrame: i % (fps * 2) === 0 });
       frame.close();

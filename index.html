@@ -233,7 +233,8 @@
     <!-- 4. 변환 중 -->
     <section class="step" data-step="working" hidden>
       <div class="working">
-        <div class="oven" aria-hidden="true"><div class="oven-film"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="oven" id="oven" aria-hidden="true"><div class="oven-film"><i></i><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="capture-view" id="captureView" hidden></div>
         <div class="w-label" id="wLabel">굽는 중</div>
         <div class="progress"><div id="wBar"></div></div>
         <div class="w-pct" id="wPct">0%</div>
@@ -285,6 +286,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <button class="diag-btn" id="diagBtn" hidden>🔧 진단 정보</button>
 
   <script type="module" src="js/app.js"></script>
 </body>
