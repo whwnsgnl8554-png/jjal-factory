@@ -761,8 +761,11 @@ $('#saveBtn').addEventListener('click', async () => {
     btn.disabled = true;
     btn.textContent = '저장하는 중…';
     try {
-      setSave(`File.saveBase64 호출 — ${state.resultName} (${state.result.blob.type}, ${(state.result.blob.size / 1024).toFixed(0)}KB)`);
-      await toss.nativeSave(state.result.blob, state.resultName);
+      setSave(`File.saveBase64 호출 — ${state.resultName} (${state.result.blob.type === 'image/gif' ? 'application/octet-stream' : state.result.blob.type}, ${(state.result.blob.size / 1024).toFixed(0)}KB)`);
+      // 토스 저장 기능은 image/gif로 넘기면 멈춘 사진으로 바꿔 저장한다(실기기 확인).
+      // 파일(octet-stream)로 넘기면 GIF가 그대로 저장돼 움직임이 유지된다.
+      const mime = state.result.blob.type === 'image/gif' ? 'application/octet-stream' : state.result.blob.type;
+      await toss.nativeSave(state.result.blob, state.resultName, mime);
       setSave(`${D.save} → 성공 응답`);
     } catch (e) {
       setSave(`${D.save} → 실패: ${e?.message || e}`);
