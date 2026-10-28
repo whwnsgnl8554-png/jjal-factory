@@ -245,6 +245,9 @@ textarea:focus, input[type="number"]:focus { outline: 2px solid var(--blue); out
 .capture-view { width: 100%; max-width: 320px; margin: -6px 0 22px; }
 .capture-view:not([hidden]) ~ .w-label { margin-top: 0; }
 .working:has(.capture-view:not([hidden])) .oven { display: none; }
+.save-lab { display: grid; gap: 8px; margin-top: 12px; padding: 14px; border-radius: 16px; border: 2px dashed var(--line); }
+.save-lab span { font-size: 13px; color: var(--text-3); }
+.save-lab button { min-height: 48px; border-radius: 12px; background: var(--bg-soft); font-weight: 700; text-align: left; padding: 0 14px; }
 .diag-btn { position: fixed; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 45; padding: 8px 12px; border-radius: 12px; background: #191f28; color: #fff; font-size: 13px; font-weight: 700; opacity: .85; }
 .sheet pre.diag { white-space: pre-wrap; word-break: break-all; font-size: 12px; line-height: 1.5; background: var(--bg-soft); border-radius: 12px; padding: 12px; max-height: 55vh; overflow: auto; margin: 0 0 14px; user-select: text; -webkit-user-select: text; }
 .w-label { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }

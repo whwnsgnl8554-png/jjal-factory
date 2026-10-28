@@ -68,9 +68,9 @@ function blobToBase64(blob) {
 }
 
 /** 토스 기기 저장. 성공하면 true */
-export async function nativeSave(blob, fileName) {
+export async function nativeSave(blob, fileName, mimeType = blob.type) {
   const data = await blobToBase64(blob);
-  await AIT.File.saveBase64({ data, fileName, mimeType: blob.type });
+  await AIT.File.saveBase64({ data, fileName, mimeType });
   return true;
 }
 

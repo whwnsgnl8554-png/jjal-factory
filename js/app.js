@@ -747,6 +747,7 @@ function renderResult() {
   $('#resultWarn').style.cssText = r.overTarget ? '' : 'background:var(--bg-soft);color:var(--text-2)';
 
   state.resultName = fileName();
+  $('#saveLab').hidden = !(state.debug && toss.canNativeSave() && r.format === 'gif');
   $('#guideBtn').textContent = `${p.emoji} ${p.name}에 올리는 법`;
   $('#againChips').innerHTML = state.presets
     .filter((x) => x.id !== p.id && x.group !== 'custom')
@@ -785,6 +786,39 @@ $('#saveBtn').addEventListener('click', async () => {
   else toast(toss.inToss ? '저장했어요! 사진 앱이나 파일 앱에서 확인해 보세요' : '저장했어요! 갤러리나 다운로드 폴더를 확인해 보세요');
 });
 $('#guideBtn').addEventListener('click', () => openGuide());
+
+// 진단 번들 전용: 토스 저장 기능이 GIF 움직임을 살리는 방식 찾기
+$('#saveLab').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-mode]');
+  const r = state.result;
+  if (!btn || btn.disabled || !r) return;
+  const mode = btn.dataset.mode;
+  const label = btn.textContent;
+  btn.disabled = true;
+  const base = state.resultName.replace(/^jjal_/, `jjal_${mode}_`);
+  try {
+    if (mode === 'A') {
+      await toss.nativeSave(r.blob, base, 'image/gif');
+    } else if (mode === 'B') {
+      await toss.nativeSave(r.blob, base, 'application/octet-stream');
+    } else {
+      if (!r.videoBlob) {
+        const s = { ...r.settings, format: 'mp4', quality: 'normal', width: r.width, scale: 1, repeat: 'inf' };
+        const out = await makeMp4(state.src, s, { onProgress: ({ ratio }) => { btn.textContent = `영상 만드는 중… ${Math.round(ratio * 100)}%`; } });
+        r.videoBlob = out.blob;
+      }
+      await toss.nativeSave(r.videoBlob, base.replace(/\.gif$/, '.mp4'), 'video/mp4');
+    }
+    D.errors.push(`저장실험 ${mode}: 성공 응답 (${base})`);
+    toast(`${mode} 방식으로 저장했어요`, 2500);
+  } catch (err) {
+    D.errors.push(`저장실험 ${mode}: 실패 ${err?.message || err}`);
+    toast(`${mode} 방식 저장 실패: ${err?.message || err}`, 4000);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+});
 $('#lowBtn').addEventListener('click', () => {
   state.s.quality = 'low';
   syncControls();
@@ -895,6 +929,7 @@ $('#brand').addEventListener('click', () => { if (state.step !== 'working' && st
   collectEnv({ 토스: toss.inToss ? '예' : '아니오', 저장API: toss.canNativeSave() ? '있음' : '없음' });
   let debugOn = !!window.__JJAL_TOSS__?.debug;
   try { debugOn ||= localStorage.getItem('jjal.debug') === '1'; } catch { /* 무시 */ }
+  state.debug = debugOn;
   if (debugOn) {
     $('#diagBtn').hidden = false;
     $('#diagBtn').addEventListener('click', () => {
